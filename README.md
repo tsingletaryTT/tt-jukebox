@@ -69,6 +69,38 @@ python3 tt-jukebox.py --model llama-3.1-8b
 python3 tt-jukebox.py --model llama-3.1-8b --setup --force
 ```
 
+### Interactive TUI (Terminal User Interface)
+
+For a more visual, interactive experience, use the TUI:
+
+```bash
+# Install TUI dependencies
+pip install -r requirements-tui.txt
+# Or: pip install textual rich
+
+# Launch the TUI
+python3 tt-jukebox-tui.py
+```
+
+**TUI Features:**
+- 🖥️ **Real-time hardware status** - See your device and firmware
+- 📊 **Interactive model browser** - Browse all compatible models with live filtering
+- 🔍 **Live search** - Type to filter models instantly
+- 📋 **Model details panel** - View complete specs for selected model
+- 💻 **Command preview** - See and copy vLLM commands
+- ⌨️ **Keyboard shortcuts** - Fast navigation (q=quit, r=refresh, /=search, s=setup)
+- 🎨 **Tenstorrent colors** - Beautiful cyan-themed interface
+
+**Keyboard Shortcuts:**
+- `q` - Quit application
+- `r` - Refresh hardware and model data
+- `s` - Setup selected model environment
+- `c` - Copy vLLM command to clipboard
+- `/` - Focus search input
+- `Esc` - Clear search
+- `↑↓` - Navigate model list
+- `h` - Show help
+
 ## How It Works
 
 ### Architecture

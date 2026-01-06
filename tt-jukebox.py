@@ -23,6 +23,7 @@ Version: 1.0.0
 import argparse
 import datetime
 import json
+import logging
 import os
 import re
 import subprocess
@@ -30,6 +31,21 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.request import urlopen
+
+# Setup logging
+LOG_DIR = Path.home() / 'tt-scratchpad' / 'logs'
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / f'tt-jukebox-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.log'
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        # Don't log to console - we use our own print functions
+    ]
+)
+logger = logging.getLogger('tt-jukebox')
 
 # Color codes for terminal output
 class Colors:
@@ -44,20 +60,25 @@ class Colors:
     UNDERLINE = '\033[4m'
 
 def print_header(text: str):
+    logger.info(f"HEADER: {text}")
     print(f"\n{Colors.HEADER}{Colors.BOLD}{'='*70}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}{text}{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}{'='*70}{Colors.ENDC}\n")
 
 def print_success(text: str):
+    logger.info(f"SUCCESS: {text}")
     print(f"{Colors.OKGREEN}✓ {text}{Colors.ENDC}")
 
 def print_info(text: str):
+    logger.info(text)
     print(f"{Colors.OKCYAN}ℹ {text}{Colors.ENDC}")
 
 def print_warning(text: str):
+    logger.warning(text)
     print(f"{Colors.WARNING}⚠ {text}{Colors.ENDC}")
 
 def print_error(text: str):
+    logger.error(text)
     print(f"{Colors.FAIL}✗ {text}{Colors.ENDC}")
 
 
@@ -245,7 +266,7 @@ def detect_tt_metal() -> Optional[Dict[str, str]]:
                 )
                 version = result.stdout.strip()
 
-                # Check if it's on main branch
+                # Get branch name (handle detached HEAD state)
                 result = subprocess.run(
                     ['git', 'branch', '--show-current'],
                     cwd=path,
@@ -253,6 +274,20 @@ def detect_tt_metal() -> Optional[Dict[str, str]]:
                     text=True
                 )
                 branch = result.stdout.strip()
+
+                # If empty (detached HEAD), try to get symbolic ref
+                if not branch:
+                    result = subprocess.run(
+                        ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                        cwd=path,
+                        capture_output=True,
+                        text=True
+                    )
+                    branch_or_head = result.stdout.strip()
+                    if branch_or_head == 'HEAD':
+                        branch = '(detached HEAD)'
+                    else:
+                        branch = branch_or_head
 
                 info = {
                     'path': str(path),
@@ -354,7 +389,7 @@ def detect_tt_vllm() -> Optional[Dict[str, str]]:
                 )
                 commit = result.stdout.strip()
 
-                # Get branch
+                # Get branch name (handle detached HEAD state)
                 result = subprocess.run(
                     ['git', 'branch', '--show-current'],
                     cwd=path,
@@ -362,6 +397,20 @@ def detect_tt_vllm() -> Optional[Dict[str, str]]:
                     text=True
                 )
                 branch = result.stdout.strip()
+
+                # If empty (detached HEAD), try to get symbolic ref
+                if not branch:
+                    result = subprocess.run(
+                        ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                        cwd=path,
+                        capture_output=True,
+                        text=True
+                    )
+                    branch_or_head = result.stdout.strip()
+                    if branch_or_head == 'HEAD':
+                        branch = '(detached HEAD)'
+                    else:
+                        branch = branch_or_head
 
                 info = {
                     'path': str(path),
@@ -639,6 +688,14 @@ def check_environment_match(spec: Dict, metal_info: Optional[Dict], vllm_info: O
     Check if current environment matches spec requirements.
     Returns dict with compatibility info.
     """
+    # Helper to compare commits (handles different SHA lengths)
+    def commits_match(current: str, required: str) -> bool:
+        if not current or not required or required in ['None', 'null']:
+            return False
+        # Normalize to first 7 chars for comparison
+        min_len = min(len(current), len(required), 7)
+        return current[:min_len] == required[:min_len]
+
     match_info = {
         'metal_compatible': False,
         'vllm_compatible': False,
@@ -655,7 +712,7 @@ def check_environment_match(spec: Dict, metal_info: Optional[Dict], vllm_info: O
     current_metal_commit = metal_info.get('commit', '')
 
     if spec_metal_commit and current_metal_commit:
-        if spec_metal_commit == current_metal_commit:
+        if commits_match(current_metal_commit, spec_metal_commit):
             match_info['metal_compatible'] = True
         else:
             match_info['metal_diff'] = f"{current_metal_commit} -> {spec_metal_commit}"
@@ -665,7 +722,7 @@ def check_environment_match(spec: Dict, metal_info: Optional[Dict], vllm_info: O
     current_vllm_commit = vllm_info.get('commit', '')
 
     if spec_vllm_commit and current_vllm_commit:
-        if spec_vllm_commit == current_vllm_commit:
+        if commits_match(current_vllm_commit, spec_vllm_commit):
             match_info['vllm_compatible'] = True
         else:
             match_info['vllm_diff'] = f"{current_vllm_commit} -> {spec_vllm_commit}"
@@ -893,10 +950,30 @@ def execute_setup(spec: Dict, model_info: Dict, metal_info: Optional[Dict],
 
     print_header(f"Setting up environment for {model_name}")
 
+    # Helper function to compare commits (handles different SHA lengths)
+    def commits_match(current: str, required: str) -> bool:
+        """Compare git commits, handling different SHA lengths."""
+        if current == 'unknown' or required in ['main', 'dev', 'None', None]:
+            return False
+        # Normalize to first 7 chars for comparison
+        min_len = min(len(current), len(required), 7)
+        return current[:min_len] == required[:min_len]
+
     try:
         # === TT-METAL CHECKOUT ===
-        if current_metal_commit != metal_commit:
+        if not commits_match(current_metal_commit, metal_commit):
             print_info("\n📦 Checking out tt-metal...")
+
+            # Stash any uncommitted changes first
+            print_info("Stashing uncommitted changes (if any)...")
+            result = subprocess.run(
+                ['git', 'stash', 'push', '-m', 'Auto-stash by tt-jukebox'],
+                cwd=metal_path,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            # Stash returns 0 even if nothing to stash, so we're good either way
 
             # Fetch latest
             result = subprocess.run(
@@ -922,6 +999,18 @@ def execute_setup(spec: Dict, model_info: Dict, metal_info: Optional[Dict],
                 print_error(f"Failed to checkout tt-metal commit {metal_commit}: {result.stderr}")
                 return False
 
+            # Update submodules
+            print_info("Updating git submodules...")
+            result = subprocess.run(
+                ['git', 'submodule', 'update', '--init', '--recursive'],
+                cwd=metal_path,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minutes for submodules
+            )
+            if result.returncode != 0:
+                print_warning(f"Submodule update had issues (continuing anyway): {result.stderr[:200]}")
+
             print_success(f"✓ tt-metal checked out to {metal_commit}")
 
             # Build tt-metal
@@ -934,8 +1023,26 @@ def execute_setup(spec: Dict, model_info: Dict, metal_info: Optional[Dict],
                 timeout=900  # 15 minute timeout for build
             )
             if result.returncode != 0:
-                print_error(f"Failed to build tt-metal: {result.stderr}")
-                return False
+                print_error(f"Build failed! Cleaning build directory and retrying...")
+                # Clean build directory
+                import shutil
+                build_dir = metal_path / 'build'
+                if build_dir.exists():
+                    print_info(f"Removing {build_dir}")
+                    shutil.rmtree(build_dir, ignore_errors=True)
+
+                # Retry build
+                print_info("Retrying build...")
+                result = subprocess.run(
+                    ['./build_metal.sh'],
+                    cwd=metal_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=900
+                )
+                if result.returncode != 0:
+                    print_error(f"Build failed after retry: {result.stderr[-500:]}")  # Last 500 chars
+                    return False
 
             print_success("✓ tt-metal built successfully")
 
@@ -943,7 +1050,7 @@ def execute_setup(spec: Dict, model_info: Dict, metal_info: Optional[Dict],
             print_success(f"✓ tt-metal already on correct commit ({metal_commit})")
 
         # === VLLM CHECKOUT ===
-        if current_vllm_commit != vllm_commit:
+        if not commits_match(current_vllm_commit, vllm_commit):
             print_info("\n📦 Checking out tt-vllm...")
 
             # Fetch latest
@@ -1087,11 +1194,14 @@ def format_cli_command(spec: Dict, model_info: Dict) -> Dict[str, str]:
     flag_separator = ' \\\n    '
     vllm_flags_str = flag_separator.join(vllm_flags)
 
+    # Use start script from tt-jukebox directory
+    script_path = Path(__file__).parent / 'start-vllm-server.py'
+
     vllm_command = f"""cd ~/tt-vllm && \\
   source ~/tt-vllm-venv/bin/activate && \\
   {env_vars} && \\
   source ~/tt-vllm/tt_metal/setup-metal.sh && \\
-  python ~/tt-scratchpad/start-vllm-server.py \\
+  python {script_path} \\
     {vllm_flags_str}"""
 
     commands['run'] = f"""# Start vLLM server with {model_name} on {device_type}
@@ -1253,6 +1363,12 @@ def interactive_selection(matches: List[Dict], metal_info: Optional[Dict],
     print(f"\n{Colors.BOLD}Select a configuration (1-{len(matches)}) or 'q' to quit:{Colors.ENDC} ", end='')
 
     try:
+        # Check if we're in a TTY (interactive terminal)
+        if not sys.stdin.isatty():
+            print_warning("\nNon-interactive mode detected. Auto-selecting first match.")
+            print_info(f"Selected: {matches[0].get('model_name', 'Unknown')}")
+            return matches[0]
+
         choice = input().strip()
         if choice.lower() == 'q':
             return None
@@ -1266,6 +1382,9 @@ def interactive_selection(matches: List[Dict], metal_info: Optional[Dict],
     except (ValueError, KeyboardInterrupt):
         print_error("\nCancelled")
         return None
+    except EOFError:
+        print_warning("\nEOF detected. Auto-selecting first match.")
+        return matches[0] if matches else None
 
 
 def main():
@@ -1310,6 +1429,9 @@ Examples:
 
     # Banner
     print_header("🎵 TT-Jukebox: Model & Environment Manager")
+    print_info(f"📝 Log file: {LOG_FILE}")
+    logger.info(f"Starting tt-jukebox v1.0.0")
+    logger.info(f"Command: {' '.join(sys.argv)}")
 
     # Detect environment
     hardware = detect_hardware()
@@ -1403,9 +1525,20 @@ Examples:
         print_info("")
 
         if not args.force:
-            response = input("Continue? [Y/n]: ").strip().lower()
-            if response and response != 'y' and response != 'yes':
-                print_warning("Setup cancelled by user")
+            try:
+                # Check if we're in a TTY (interactive terminal)
+                if not sys.stdin.isatty():
+                    print_warning("Non-interactive mode detected. Use --force to auto-confirm.")
+                    print_warning("Setup cancelled - run with --force flag to skip confirmation")
+                    return 0
+
+                response = input("Continue? [Y/n]: ").strip().lower()
+                if response and response != 'y' and response != 'yes':
+                    print_warning("Setup cancelled by user")
+                    return 0
+            except EOFError:
+                print_warning("\nEOF detected. Use --force to auto-confirm.")
+                print_warning("Setup cancelled - run with --force flag to skip confirmation")
                 return 0
 
         success = execute_setup(selected, model_info, metal_info, vllm_info)

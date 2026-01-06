@@ -45,8 +45,8 @@ setup(
     author_email="",
     url="https://github.com/tenstorrent/tt-jukebox",
 
-    # Single-file module (tt-jukebox.py)
-    py_modules=["tt-jukebox"],
+    # Single-file modules
+    py_modules=["tt-jukebox", "tt-jukebox-tui"],
 
     python_requires=">=3.9",
     install_requires=install_requires,
@@ -56,6 +56,7 @@ setup(
     entry_points={
         "console_scripts": [
             "tt-jukebox=tt-jukebox:main",
+            "tt-jukebox-tui=tt-jukebox-tui:main",
         ],
     },
 
