@@ -1,0 +1,5 @@
+# tt-jukebox TUI Interface Dependencies
+# Install with: pip install -r requirements-tui.txt
+
+textual>=0.47.0
+rich>=13.7.0

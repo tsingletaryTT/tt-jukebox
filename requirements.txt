@@ -1,0 +1,11 @@
+# tt-jukebox Requirements
+# Python 3.9+ required
+
+# Core dependencies (NONE for CLI-only mode)
+# The CLI uses only Python standard library for zero-dependency operation
+
+# For model downloads (usually already installed):
+# huggingface-hub>=0.19.0
+
+# Optional TUI interface dependencies (install separately):
+# pip install -r requirements-tui.txt
