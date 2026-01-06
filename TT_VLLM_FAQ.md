@@ -342,6 +342,13 @@ python ~/tt-jukebox/start-vllm-server.py \
   --block-size 64
 ```
 
+**Note:** The `start-vllm-server.py` script now automatically verifies and installs required dependencies:
+- `llama-models` (from Tenstorrent's fork)
+- `loguru` (structured logging)
+- `pytest` (testing framework)
+
+These will be installed automatically if missing, so you don't need to worry about them!
+
 ---
 
 ## Diagnostic Commands

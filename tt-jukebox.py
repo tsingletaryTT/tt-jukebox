@@ -188,7 +188,7 @@ def install_tt_metal() -> Optional[Dict[str, str]]:
             ['git', 'clone', 'https://github.com/tenstorrent/tt-metal.git', str(install_path)],
             capture_output=True,
             text=True,
-            timeout=300
+            timeout=800
         )
 
         if result.returncode != 0:
@@ -325,7 +325,7 @@ def install_tt_vllm() -> Optional[Dict[str, str]]:
             ['git', 'clone', 'https://github.com/tenstorrent/vllm.git', str(install_path)],
             capture_output=True,
             text=True,
-            timeout=300
+            timeout=800
         )
 
         if result.returncode != 0:
@@ -1006,7 +1006,7 @@ def execute_setup(spec: Dict, model_info: Dict, metal_info: Optional[Dict],
                 cwd=metal_path,
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minutes for submodules
+                timeout=1500  # 5 minutes for submodules
             )
             if result.returncode != 0:
                 print_warning(f"Submodule update had issues (continuing anyway): {result.stderr[:200]}")
@@ -1020,7 +1020,7 @@ def execute_setup(spec: Dict, model_info: Dict, metal_info: Optional[Dict],
                 cwd=metal_path,
                 capture_output=True,
                 text=True,
-                timeout=900  # 15 minute timeout for build
+                timeout=1900  # 15 minute timeout for build
             )
             if result.returncode != 0:
                 print_error(f"Build failed! Cleaning build directory and retrying...")
@@ -1038,7 +1038,7 @@ def execute_setup(spec: Dict, model_info: Dict, metal_info: Optional[Dict],
                     cwd=metal_path,
                     capture_output=True,
                     text=True,
-                    timeout=900
+                    timeout=1900
                 )
                 if result.returncode != 0:
                     print_error(f"Build failed after retry: {result.stderr[-500:]}")  # Last 500 chars

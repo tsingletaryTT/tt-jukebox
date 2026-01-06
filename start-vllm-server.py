@@ -288,6 +288,59 @@ def inject_defaults():
         pass  # No --model argument or invalid format
 
 
+def verify_dependencies():
+    """
+    Verify and install required Python dependencies for vLLM and TT models.
+
+    Ensures these packages are installed:
+    - llama-models: Required for Llama model utilities and tokenization
+    - loguru: Required for structured logging in vLLM
+    - pytest: Required for testing and validation
+
+    This function runs quietly - only shows output if packages need installation.
+    """
+    print("✓ Verifying dependencies...")
+
+    required_packages = [
+        ('llama-models', 'git+https://github.com/tenstorrent/llama-models'),
+        ('loguru', 'loguru'),
+        ('pytest', 'pytest'),
+    ]
+
+    for package_name, install_spec in required_packages:
+        try:
+            # Try importing the package (use underscore version of name)
+            import_name = package_name.replace('-', '_')
+            __import__(import_name)
+        except ImportError:
+            # Package not installed - install it
+            print(f"  Installing {package_name}...")
+            try:
+                # Use --quiet for git packages to reduce output
+                if install_spec.startswith('git+'):
+                    result = subprocess.run(
+                        [sys.executable, '-m', 'pip', 'install', '--quiet', install_spec],
+                        capture_output=True,
+                        text=True
+                    )
+                else:
+                    result = subprocess.run(
+                        [sys.executable, '-m', 'pip', 'install', install_spec],
+                        capture_output=True,
+                        text=True
+                    )
+
+                if result.returncode == 0:
+                    print(f"  ✓ Installed {package_name}")
+                else:
+                    print(f"  ⚠️  Warning: Failed to install {package_name}")
+                    print(f"     Error: {result.stderr[:200]}")
+            except Exception as e:
+                print(f"  ⚠️  Warning: Failed to install {package_name}: {e}")
+
+    print("✓ Dependency verification complete")
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("🚀 Starting vLLM Server with Auto-Configuration")
@@ -305,7 +358,11 @@ if __name__ == '__main__':
     # This must happen before registering TT models
     auto_detect_hf_model()
 
-    # Step 4: Register TT models with vLLM
+    # Step 4: Verify and install required dependencies
+    # Ensures llama-models, loguru, pytest, and other deps are installed
+    verify_dependencies()
+
+    # Step 5: Register TT models with vLLM
     # This must happen before vLLM loads any models
     register_tt_models()
 
