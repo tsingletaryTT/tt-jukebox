@@ -69,6 +69,32 @@ python3 tt-jukebox.py --model llama-3.1-8b
 python3 tt-jukebox.py --model llama-3.1-8b --setup --force
 ```
 
+### AI Coding Agents (Aider & Continue)
+
+Once your vLLM server is running, connect AI coding agents to build projects with AI assistance:
+
+```bash
+# Quick automated setup for Aider CLI agent
+./setup-aider.sh
+
+# Or follow the comprehensive lesson
+cat LESSON_CODING_AGENT.md
+```
+
+**What you'll get:**
+- 🤖 **Aider CLI agent** - Terminal-based coding with git integration
+- 💻 **Continue VSCode extension** - IDE-integrated AI assistance
+- 📚 **Complete tutorial** - Step-by-step setup and example projects
+- 🔧 **Automated setup** - One script to configure everything
+
+**Example workflow:**
+1. Start vLLM server with tt-jukebox
+2. Run `./setup-aider.sh` to install Aider
+3. Start building: `aider-tt` in your project directory
+4. 100% local, private AI coding assistance!
+
+See [LESSON_CODING_AGENT.md](LESSON_CODING_AGENT.md) for the complete guide.
+
 ### Interactive TUI (Terminal User Interface)
 
 For a more visual, interactive experience, use the TUI:
